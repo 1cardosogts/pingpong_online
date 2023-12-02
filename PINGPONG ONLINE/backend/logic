@@ -1,0 +1,29 @@
+import firebase_admin
+from firebase_admin import credentials, db
+
+class PongGameController:
+    def __init__(self):
+        self.paddle_y = 0.0
+        self.ball_x = 0.0
+        self.ball_y = 0.0
+        self.ball_radius = 10
+
+    def update_paddle_position(self, delta):
+        self.paddle_y += delta
+
+    def reset_paddle_position(self):
+        self.paddle_y = 0.0
+
+    def update_ball_position(self):
+        self.ball_x += 5
+        self.ball_y = self.paddle_y + 30
+
+    def get_state(self):
+        return {
+            "paddleY": self.paddle_y,
+            "ballX": self.ball_x,
+            "ballY": self.ball_y,
+            "ballRadius": self.ball_radius,
+        }
+
+game_controller = PongGameController()

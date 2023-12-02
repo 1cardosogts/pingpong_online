@@ -1,0 +1,184 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
+
+class PongScreen extends StatefulWidget {
+  @override
+  _PongScreenState createState() => _PongScreenState();
+}
+
+class _PongScreenState extends State<PongScreen> {
+  final PongGameController gameController = PongGameController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(
+              'Autores: GUSTAVO CARDOSO 1431432312003, KEVIN RYAN 1431432312023',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+          AspectRatio(
+            aspectRatio: 1.5,
+            child: Container(
+              decoration: BoxDecoration(border: Border.all(color: Colors.white)),
+              child: PongGame(controller: gameController),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PongGame extends StatefulWidget {
+  final PongGameController controller;
+
+  PongGame({required this.controller});
+
+  @override
+  _PongGameState createState() => _PongGameState();
+}
+
+class _PongGameState extends State<PongGame> {
+  late Timer _timer;
+  final DatabaseReference databaseReference = FirebaseDatabase.instance.reference().child('gameState');
+
+@override
+void initState() {
+  super.initState();
+  databaseReference.onValue.listen((event) {
+    if (event.snapshot.value != null) {
+      setState(() {
+        widget.controller.updateGameState(event.snapshot.value);
+      });
+    }
+  });
+  _timer = Timer.periodic(Duration(milliseconds: 16), (Timer timer) {
+    setState(() {
+      widget.controller.updateBallPosition();
+      sendGameDataToFirebase(widget.controller);
+    });
+  });
+}
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onVerticalDragUpdate: (details) {
+        setState(() {
+          widget.controller.updatePaddlePosition(details.primaryDelta!);
+          sendGameDataToFirebase(widget.controller);
+        });
+      },
+      onVerticalDragEnd: (details) {
+        setState(() {
+          widget.controller.resetPaddlePosition();
+          sendGameDataToFirebase(widget.controller);
+        });
+      },
+      child: CustomPaint(
+        painter: PongPainter(widget.controller),
+      ),
+    );
+  }
+
+  // Function to send game data to Firebase
+  Future<void> sendGameDataToFirebase(PongGameController controller) async {
+    try {
+      await databaseReference.set(controller.getGameState());
+      print('Game data sent successfully to Firebase!');
+    } catch (e) {
+      print('Error sending game data to Firebase: $e');
+    }
+  }
+}
+
+class PongGameController extends ChangeNotifier {
+  double paddleY = 0.0;
+  double ballX = 0.0;
+  double ballY = 0.0;
+  double ballRadius = 10;
+  double ballSpeedX = 5;
+  double ballSpeedY = 5;
+
+  void updatePaddlePosition(double delta) {
+    paddleY += delta;
+    notifyListeners();
+  }
+
+  void resetPaddlePosition() {
+    paddleY = 0.0;
+    notifyListeners();
+  }
+
+  void updateBallPosition() {
+    ballX += ballSpeedX;
+    ballY += ballSpeedY;
+
+    if (ballY - ballRadius <= 0 || ballY + ballRadius >= 1.5 * 100) {
+      ballSpeedY *= -1;
+    }
+
+    if (ballX - ballRadius <= 0 || ballX + ballRadius >= 1.5 * 100) {
+      resetBallPosition();
+    }
+
+    notifyListeners();
+  }
+
+  void resetBallPosition() {
+    ballX = 0.0;
+    ballY = paddleY + 30;
+  }
+
+  void updateGameState(Map<String, dynamic> gameState) {
+  paddleY = gameState["paddleY"];
+  ballX = gameState["ballX"];
+  ballY = gameState["ballY"];
+  ballRadius = gameState["ballRadius"];
+  notifyListeners();
+}
+
+  // Return the current game state
+  Map<String, dynamic> getGameState() {
+    return {
+      "paddleY": paddleY,
+      "ballX": ballX,
+      "ballY": ballY,
+      "ballRadius": ballRadius,
+    };
+  }
+}
+
+class PongPainter extends CustomPainter {
+  final PongGameController controller;
+
+  PongPainter(this.controller);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()..color = Colors.white;
+
+    canvas.drawRect(Rect.fromLTWH(size.width - 20, controller.paddleY, 10, 60), paint);
+
+    canvas.drawCircle(Offset(controller.ballX, controller.ballY), controller.ballRadius, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return true;
+  }
+}

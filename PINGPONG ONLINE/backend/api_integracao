@@ -1,0 +1,43 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const mysql = require('mysql');
+
+const app = express();
+const port = 3000;
+
+app.use(bodyParser.json());
+
+const db = mysql.createConnection({
+  host: '3000',
+  user: 'root',
+  password: '',
+  database: 'databaselocal',
+});
+
+db.connect((err) => {
+  if (err) {
+    console.error('Falha na conexão com o banco de dados: ' + err.stack);
+    return;
+  }
+  console.log('Conectado ao banco de dados');
+});
+
+app.post('/register', (req, res) => {
+  const { username, email, password } = req.body;
+
+  const sql = 'INSERT INTO users (username, email, password) VALUES (?, ?, ?)';
+  db.query(sql, [username, email, password], (err, result) => {
+    if (err) {
+      console.error('Erro ao inserir usuário: ' + err.message);
+      res.status(500).json({ error: 'Erro interno do servidor' });
+      return;
+    }
+
+    console.log('Usuário registrado com sucesso');
+    res.status(200).json({ success: true });
+  });
+});
+
+app.listen(port, () => {
+  console.log(`Servidor está rodando na porta ${port}`);
+});
