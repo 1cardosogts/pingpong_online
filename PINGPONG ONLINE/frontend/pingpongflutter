@@ -50,23 +50,23 @@ class _PongGameState extends State<PongGame> {
   late Timer _timer;
   final DatabaseReference databaseReference = FirebaseDatabase.instance.reference().child('gameState');
 
-@override
-void initState() {
-  super.initState();
-  databaseReference.onValue.listen((event) {
-    if (event.snapshot.value != null) {
-      setState(() {
-        widget.controller.updateGameState(event.snapshot.value);
-      });
-    }
-  });
-  _timer = Timer.periodic(Duration(milliseconds: 16), (Timer timer) {
-    setState(() {
-      widget.controller.updateBallPosition();
-      sendGameDataToFirebase(widget.controller);
+  @override
+  void initState() {
+    super.initState();
+    databaseReference.onValue.listen((event) {
+      if (event.snapshot.value != null) {
+        setState(() {
+          widget.controller.updateGameState(event.snapshot.value);
+        });
+      }
     });
-  });
-}
+    _timer = Timer.periodic(Duration(milliseconds: 16), (Timer timer) {
+      setState(() {
+        widget.controller.updateBallPosition();
+        sendGameDataToFirebase(widget.controller);
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -78,30 +78,42 @@ void initState() {
   Widget build(BuildContext context) {
     return GestureDetector(
       onVerticalDragUpdate: (details) {
-        setState(() {
-          widget.controller.updatePaddlePosition(details.primaryDelta!);
-          sendGameDataToFirebase(widget.controller);
-        });
+        widget.controller.updatePaddlePosition(details.primaryDelta!);
+        sendGameDataToFirebase(widget.controller);
       },
       onVerticalDragEnd: (details) {
-        setState(() {
-          widget.controller.resetPaddlePosition();
-          sendGameDataToFirebase(widget.controller);
-        });
+        widget.controller.resetPaddlePosition();
+        sendGameDataToFirebase(widget.controller);
       },
-      child: CustomPaint(
-        painter: PongPainter(widget.controller),
+      child: Stack(
+        children: [
+          CustomPaint(
+            painter: PongPainter(widget.controller),
+          ),
+          if (widget.controller.showRestartMessage)
+            Center(
+              child: Container(
+                color: Colors.black.withOpacity(0.7),
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Faça novamente!',
+                  style: TextStyle(fontSize: 24, color: Colors.white),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
-  // Function to send game data to Firebase
   Future<void> sendGameDataToFirebase(PongGameController controller) async {
     try {
       await databaseReference.set(controller.getGameState());
       print('Game data sent successfully to Firebase!');
     } catch (e) {
       print('Error sending game data to Firebase: $e');
+      controller.showErrorMessage();
+      controller.restartGame();
     }
   }
 }
@@ -113,6 +125,7 @@ class PongGameController extends ChangeNotifier {
   double ballRadius = 10;
   double ballSpeedX = 5;
   double ballSpeedY = 5;
+  bool showRestartMessage = false;
 
   void updatePaddlePosition(double delta) {
     paddleY += delta;
@@ -145,14 +158,25 @@ class PongGameController extends ChangeNotifier {
   }
 
   void updateGameState(Map<String, dynamic> gameState) {
-  paddleY = gameState["paddleY"];
-  ballX = gameState["ballX"];
-  ballY = gameState["ballY"];
-  ballRadius = gameState["ballRadius"];
-  notifyListeners();
-}
+    paddleY = gameState["paddleY"];
+    ballX = gameState["ballX"];
+    ballY = gameState["ballY"];
+    ballRadius = gameState["ballRadius"];
+    notifyListeners();
+  }
 
-  // Return the current game state
+  void restartGame() {
+    resetPaddlePosition();
+    resetBallPosition();
+    showRestartMessage = false;
+    notifyListeners();
+  }
+
+  void showErrorMessage() {
+    showRestartMessage = true;
+    notifyListeners();
+  }
+
   Map<String, dynamic> getGameState() {
     return {
       "paddleY": paddleY,
